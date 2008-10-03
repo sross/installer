@@ -92,6 +92,7 @@ the element-type of the returned string."
   (let ((path (merge-pathnames (make-pathname :directory '(:relative "tmp")
                                               :name (format nil "download~D" (random 1000)) :type "lisp")
                                *root-pathname*)))
+    (ensure-directories-exist path)
     (if (probe-file path)
         (create-temp-file)
         path)))

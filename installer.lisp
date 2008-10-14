@@ -107,7 +107,7 @@ the element-type of the returned string."
    (declare (ignore version))
    (when file (error "File based installation is not supported yet, don't worry we're working on it.")))
   (:method ((name symbol) &key version &allow-other-keys)
-   (install (normalize name) :version version))
+   (install (find-system name :version version)))
   (:method ((name string) &key version &allow-other-keys)
    (install (find-system name :version version)))
   (:method ((system system) &key &allow-other-keys)

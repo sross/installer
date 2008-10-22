@@ -45,6 +45,12 @@
              (format s "Attempting to download system ~A failed as it has no provider."
                      (system-of c)))))
 
+(define-condition download-invalid (error)
+  ((system :initarg :system :reader system-of))
+  (:report (lambda (c s)
+             (format s "Components missing from download of ~A.~%The following components where not present after the download: ~{~S~^, ~}."
+                     (system-of c) (remove-if 'component-exists-p (components-of (system-of c)))))))
+
 ;; Util Functions
 (defun copy-stream (input output)
   (let ((buf (make-array (min (expt 2 16) array-dimension-limit)
@@ -118,10 +124,14 @@ the element-type of the returned string."
          (with-temp-file (system-source)
            (download-source system :into system-source)
            (check-md5sum system-source system)
-           (extract-source system system-source)))
+           (extract-source system system-source)
+           (verify-download system)))
      (download-dependencies system)
      (perform system 'load-action))))
 
+(defmethod verify-download ((system system))
+  (unless (every 'component-exists-p (components-of system))
+    (error 'download-invalid :system system)))
 
 (defmethod dependent-systems-of ((system system))
   (mapcar 'cdr (dependencies-of (make-instance 'action) system)))

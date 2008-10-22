@@ -216,10 +216,9 @@ the element-type of the returned string."
     (when (probe-file path)
       (let ((provider (sysdef::definition-file-provider path)))
         (delete-file path)
-        (setf sysdef::*systems*
-              (remove-if (lambda (sys)
-                           (eql (provider-of sys) provider))
-                         sysdef::*systems*))))))
+        (undefine-system (systems-matching (lambda (sys)
+                                             (eql (provider-of sys) provider))))))))
+
 
 (defun update (url)
   (add-definition url :reload t))

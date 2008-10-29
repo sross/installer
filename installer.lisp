@@ -25,6 +25,7 @@
 (defvar *proxy-server* nil)
 (defvar *proxy-authorization* nil)
 
+(defparameter *boot-file-download-url* "http://mudballs.com/boot/boot.lisp")
 
 ;; Conditions
 (define-condition requested-file-unavailable (serious-condition)
@@ -40,7 +41,7 @@
                        system expected received)))))
 
 (define-condition no-provider (error)
-  ((system :initarg system :reader system-of))
+  ((system :initarg :system :reader system-of))
   (:report (lambda (c s)
              (format s "Attempting to download system ~A failed as it has no provider."
                      (system-of c)))))
@@ -58,6 +59,11 @@
     (loop for bytes-read = (read-sequence buf input)
           until (zerop bytes-read) :do
           (write-sequence buf output :end bytes-read))))
+
+(defun copy-file (input output)
+  (with-open-file (outs output :if-exists :supersede :element-type '(unsigned-byte 8) :direction :output)
+    (with-open-file (ins input :element-type '(unsigned-byte 8))
+      (copy-stream ins outs))))
 
 ;; This has been `borrowed` from Nathan Froyds excellent ironclad package.
 (defun byte-array-to-hex-string (vector &key (start 0) end (element-type 'character))
@@ -145,9 +151,13 @@ the element-type of the returned string."
   (format nil "~(~A.~A.~A~)" (name-of system) (sysdef::version-string system)  "mb"))
 
 (defmethod download-url-of ((system system))
-  (merge-uris (uri (format nil "~{~A~^/~}"
-                           (list "systems" (system-file-name system))))
-              (url-of (provider-of system))))
+  ;; We special case the boot system here rather than in an eql specializer in case the system
+  ;; is redefinied which would make the method no longer applicable
+  (if (name= :boot (name-of system))
+      *boot-file-download-url*
+      (merge-uris (uri (format nil "~{~A~^/~}"
+                               (list "systems" (system-file-name system))))
+                  (url-of (provider-of system)))))
 
 (defmethod download-source (system &key into)
   (dbg "Downloading source for ~A from ~A." system (download-url-of system))
@@ -216,8 +226,8 @@ the element-type of the returned string."
     (when (probe-file path)
       (let ((provider (sysdef::definition-file-provider path)))
         (delete-file path)
-        (undefine-system (systems-matching (lambda (sys)
-                                             (eql (provider-of sys) provider))))))))
+        (mapcar 'undefine-system (systems-matching (lambda (sys)
+                                                     (eql (provider-of sys) provider))))))))
 
 
 (defun update (url)
@@ -234,15 +244,34 @@ the element-type of the returned string."
   ;; download patches for installed systems
   )
 
+
+
+(defun file-equalp (file1 file2)
+  (equalp (md5sum-file file1)
+          (md5sum-file file2)))
+
+(defmacro with-filed-backed-up ((path) &body body)
+  (with-gensyms (gfile)
+    (once-only (path)
+      `(with-temp-file (,gfile)
+         (copy-file ,path ,gfile)
+
+         (handler-bind ((error (lambda (c)
+                                 (declare (ignore c))
+                                 (ignore-errors (copy-file ,gfile ,path)))))
+           ,@body)))))
+
+(defun system-update ()
+  (let* ((boot.lisp (find-component :boot "boot"))
+         (input-file (input-file boot.lisp)))
+    (with-temp-file (new-boot.lisp)
+      (download-source (find-system :boot) :into new-boot.lisp)
+
+      (with-filed-backed-up (input-file)
+        (unless (file-equalp input-file new-boot.lisp)
+          (copy-file new-boot.lisp (input-file boot.lisp))))))
+  t)
+
+;(system-update)
+
 ;; EOF
-
-;(pathname-directory (enough-namestring "foo/bar/baz.lisp" #P""))
-;(path-to-url (url-to-path "http://mudballs.com/stable/mudballs.lisp"))
-;(add-definition "http://mudballs.com/stable/mudballs.lisp")
-;(remove-definition "http://mudballs.com/stable/mudballs.lisp")
-
-;(url-to-path "http://mudballs.com/stable/mudballs.lisp")
-
-
-
-

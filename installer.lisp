@@ -28,25 +28,27 @@
 (defparameter *boot-file-download-url* "http://mudballs.com/boot/boot.lisp")
 
 ;; Conditions
-(define-condition requested-file-unavailable (serious-condition)
+(define-condition download-condition (condition) ())
+
+(define-condition requested-file-unavailable (serious-condition download-condition)
   ((url :initarg :url :initform "Unknown" :reader url-of))
   (:report (lambda (c s)
              (format s "The file requested from ~A is not available." (url-of c)))))
 
-(define-condition md5sum-mismatch (error)
+(define-condition md5sum-mismatch (error download-condition)
   ((received :initarg :received) (expected :initarg :expected) (system :initarg :system))
   (:report (lambda (c s)
              (with-slots (received expected system) c
                (format s "Md5 mismatch when downloading system ~S. Expected ~S but received ~S"
                        system expected received)))))
 
-(define-condition no-provider (error)
+(define-condition no-provider (error download-condition)
   ((system :initarg :system :reader system-of))
   (:report (lambda (c s)
              (format s "Attempting to download system ~A failed as it has no provider."
                      (system-of c)))))
 
-(define-condition download-invalid (error)
+(define-condition download-invalid (error download-condition)
   ((system :initarg :system :reader system-of))
   (:report (lambda (c s)
              (format s "Components missing from download of ~A.~%The following components where not present after the download: ~{~S~^, ~}."

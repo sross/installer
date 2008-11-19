@@ -1,3 +1,26 @@
+;; Copyright (c) 2008 Sean Ross
+;; 
+;; Permission is hereby granted, free of charge, to any person
+;; obtaining a copy of this software and associated documentation
+;; files (the "Software"), to deal in the Software without
+;; restriction, including without limitation the rights to use,
+;; copy, modify, merge, publish, distribute, sublicense, and/or sell
+;; copies of the Software, and to permit persons to whom the
+;; Software is furnished to do so, subject to the following
+;; conditions:
+;; 
+;; The above copyright notice and this permission notice shall be
+;; included in all copies or substantial portions of the Software.
+;; 
+;; THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+;; EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+;; OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+;; NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+;; HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+;; WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+;; FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+;; OTHER DEALINGS IN THE SOFTWARE.
+;;
 ;;; We don't define an `uninstall` action since it's a portability nightmare trying
 ;;; to delete directories.
 
@@ -116,6 +139,14 @@ the element-type of the returned string."
 ;; It doesn't make sense defining install as an action since
 ;; the value of the action mechanism is in the recursive `descend into children`
 ;; behaviour which this action doesn't need.
+(defgeneric download (system)
+  (:method ((system system))
+   (with-temp-file (system-source)
+     (download-source system :into system-source)
+     (check-md5sum system-source system)
+     (extract-source system system-source)
+     (verify-download system))))
+
 (defgeneric install (name &key version file)
   (:method :before (name &key version file)
    (declare (ignore version))
@@ -129,11 +160,7 @@ the element-type of the returned string."
      (dbg "Installing System ~A." system)
      (if (component-exists-p system)
          (dbg "System ~A already present, skipping." system)
-         (with-temp-file (system-source)
-           (download-source system :into system-source)
-           (check-md5sum system-source system)
-           (extract-source system system-source)
-           (verify-download system)))
+         (download system))
      (download-dependencies system)
      (perform system 'load-action))))
 
@@ -162,9 +189,9 @@ the element-type of the returned string."
                   (url-of (provider-of system)))))
 
 (defmethod download-source (system &key into)
-  (dbg "Downloading source for ~A from ~A." system (download-url-of system))
   (unless (provider-of system)
     (error 'no-provider :system system))
+  (dbg "Downloading source for ~A from ~A." system (download-url-of system))
   (let ((url (download-url-of system)))
     (multiple-value-bind (stream status)
         (http-request url :proxy *proxy-server* :want-stream t

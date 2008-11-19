@@ -1,7 +1,7 @@
 (in-package :sysdef-user)
 
 (define-system :installer (serial-system)
-  (:version 0 1 5)
+  (:version 0 1 6)
   (:components "package" "installer")
   (:needs :drakma :mudballs :puri :cl-ppcre :md5 :gzip-stream :archive :alexandria))
 

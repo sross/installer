@@ -262,10 +262,13 @@ the element-type of the returned string."
 (defun update (url)
   (add-definition url :reload t))
 
+
 (defun upgrade ()
   (dolist (comp (all-files (find-system :sysdef-definitions)))
     (with-simple-restart (ignore "Ignore")
-      (update (path-to-url (input-file comp)))))
+      (when (sysdef::definition-file-provider (input-file comp))
+        (format *standard-output* "Updating definition file ~A." (input-file comp))
+        (update (path-to-url (input-file comp))))))
 
   ;; TODO: Write me
   ;; Download latest version of installed systems

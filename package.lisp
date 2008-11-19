@@ -25,8 +25,12 @@
 
 (defpackage #:installer
   (:use :cl :sysdef :md5 :drakma :gzip-stream :archive :puri :cl-ppcre :alexandria)
+  (:shadow #:copy-file #:copy-stream)
   (:export #:install #:update #:upgrade #:add-definition #:remove-definition
-   #:*proxy-server* #:*proxy-authorization*))
+   #:*proxy-server* #:*proxy-authorization*
+   ;; conditions
+   #:download-condition #:requested-file-unavailable #:md5sum-mismatch
+   #:no-provider #:download-invalid))
 
 
 

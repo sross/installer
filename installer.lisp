@@ -246,7 +246,7 @@ the element-type of the returned string."
       (with-open-stream (input stream)
         (unless (= status 200)
           (error 'requested-file-unavailable :url url))
-        (with-open-file (output path :element-type '(unsigned-byte 8) :direction :output
+        (with-open-file (output path :element-type (stream-element-type input) :direction :output
                                 :if-exists :supersede)
           (copy-stream input output))))
     t))

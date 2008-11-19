@@ -79,8 +79,8 @@
 
 ;; Util Functions
 (defun copy-stream (input output)
-  (let ((buf (make-array (min (expt 2 16) array-dimension-limit)
-                         :element-type '(unsigned-byte 8))))
+  (let ((buf (make-array (min (expt 2 8) array-dimension-limit)
+                         :element-type (stream-element-type input))))
     (loop for bytes-read = (read-sequence buf input)
           until (zerop bytes-read) :do
           (write-sequence buf output :end bytes-read))))
@@ -199,7 +199,8 @@ the element-type of the returned string."
       (with-open-stream (input stream)
         (unless (= status 200)
           (error 'requested-file-unavailable :url url))
-        (with-open-file (output into :direction :output :if-exists :supersede :element-type '(unsigned-byte 8))
+        (with-open-file (output into :direction :output :if-exists :supersede
+                                :element-type (stream-element-type input))
           (copy-stream input output))))))
 
 (defun extract-source (system source)

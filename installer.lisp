@@ -44,6 +44,10 @@
   (apply 'format *debug-io* fmt-ctrl fmt-args)
   (fresh-line *debug-io*))
 
+
+(deftype octet ()
+  '(unsigned-byte 8))
+
 ;; Specials
 (defvar *proxy-server* nil)
 (defvar *proxy-authorization* nil)
@@ -80,7 +84,7 @@
 ;; Util Functions
 (defun copy-stream (input output)
   (let ((buf (make-array (min (expt 2 8) array-dimension-limit)
-                         :element-type (stream-element-type input))))
+                         :element-type 'octet)))
     (loop for bytes-read = (read-sequence buf input)
           until (zerop bytes-read) :do
           (write-sequence buf output :end bytes-read))))
@@ -115,7 +119,8 @@ the element-type of the returned string."
     (let ((md5 (byte-array-to-hex-string (md5sum-file source))))
       (unless (string= (md5sum-of system) md5)
         (error 'md5sum-mismatch :expected (md5sum-of system) :received md5 :system system))
-      (dbg "Md5sum matches."))))
+      (dbg "Md5sum matches.")))
+  t)
 
 (defmacro with-temp-file ((var-name) &body body)
   (let ((gfile (gensym)))
@@ -143,25 +148,29 @@ the element-type of the returned string."
   (:method ((system system))
    (with-temp-file (system-source)
      (download-source system :into system-source)
-     (check-md5sum system-source system)
-     (extract-source system system-source)
-     (verify-download system))))
+     (install-from-file system system-source))))
+
+(defmethod install-from-file ((system system) file)
+  (check-md5sum file system)
+  (extract-source system file)
+  (verify-download system))
 
 (defgeneric install (name &key version file)
-  (:method :before (name &key version file)
+  (:method ((name symbol) &key version file)
+   (install (find-system name :version version) :file file))
+  
+  (:method ((name string) &key version file)
+   (install (find-system name :version version) :file file))
+  
+  (:method ((system system) &key version file)
    (declare (ignore version))
-   (when file (error "File based installation is not supported yet, don't worry we're working on it.")))
-  (:method ((name symbol) &key version &allow-other-keys)
-   (install (find-system name :version version)))
-  (:method ((name string) &key version &allow-other-keys)
-   (install (find-system name :version version)))
-  (:method ((system system) &key &allow-other-keys)
    (when (supportedp system)
      (dbg "Installing System ~A." system)
-     (if (component-exists-p system)
-         (dbg "System ~A already present, skipping." system)
-         (download system))
-     (download-dependencies system)
+     (cond ((component-exists-p system)
+            (dbg "System ~A already present, skipping." system))
+           (file (install-from-file system file))
+           (t (download system)))
+     (process-dependencies system)
      (perform system 'load-action))))
 
 (defmethod verify-download ((system system))
@@ -171,7 +180,7 @@ the element-type of the returned string."
 (defmethod dependent-systems-of ((system system))
   (mapcar 'cdr (dependencies-of (make-instance 'action) system)))
   
-(defmethod download-dependencies ((system system))
+(defmethod process-dependencies ((system system))
   (when (dependent-systems-of system)
     (dbg "Processing Dependencies.")
     (mapcar 'install (dependent-systems-of system))))
@@ -196,12 +205,14 @@ the element-type of the returned string."
     (multiple-value-bind (stream status)
         (http-request url :proxy *proxy-server* :want-stream t
                       :proxy-basic-authorization *proxy-authorization*)
+      (setf (flex:flexi-stream-element-type stream) 'octet)
       (with-open-stream (input stream)
         (unless (= status 200)
           (error 'requested-file-unavailable :url url))
         (with-open-file (output into :direction :output :if-exists :supersede
-                                :element-type (stream-element-type input))
-          (copy-stream input output))))))
+                                :element-type 'octet)
+          (copy-stream input output)))))
+  t)
 
 (defun extract-source (system source)
   (dbg "Extracting to ~S." (component-pathname system))
@@ -243,10 +254,11 @@ the element-type of the returned string."
     (multiple-value-bind (stream status)
         (http-request url :proxy *proxy-server* :proxy-basic-authorization *proxy-authorization*
                       :want-stream t)
+      (setf (flex:flexi-stream-element-type stream) 'octet)      
       (with-open-stream (input stream)
         (unless (= status 200)
           (error 'requested-file-unavailable :url url))
-        (with-open-file (output path :element-type (stream-element-type input) :direction :output
+        (with-open-file (output path :element-type 'octet :direction :output
                                 :if-exists :supersede)
           (copy-stream input output))))
     t))

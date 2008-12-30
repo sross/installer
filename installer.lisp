@@ -40,10 +40,12 @@
 (in-package #:installer)
 
 ;; Utils
-(defun dbg (fmt-ctrl &rest fmt-args)
-  (apply 'format *debug-io* fmt-ctrl fmt-args)
-  (fresh-line *debug-io*))
+(defvar *indent* 0
+  "Bound to the number of spaces to indent the current information message.")
 
+(defun dbg (fmt-ctrl &rest fmt-args)
+  (apply 'format *debug-io* (format nil "~~v@T~A"  fmt-ctrl) *indent* fmt-args)
+  (fresh-line *debug-io*))
 
 (deftype octet ()
   '(unsigned-byte 8))
@@ -126,8 +128,7 @@ the element-type of the returned string."
   (let ((gfile (gensym)))
     `(let* ((,gfile (create-temp-file))
             (,var-name ,gfile))
-       (ensure-directories-exist ,var-name)
-       (unwind-protect (progn ,@body)
+       (unwind-protect (progn (ensure-directories-exist ,var-name) ,@body)
          (when (probe-file ,gfile) (delete-file ,gfile))))))
 
 (defun create-temp-file ()
@@ -151,9 +152,12 @@ the element-type of the returned string."
      (install-from-file system system-source))))
 
 (defmethod install-from-file ((system system) file)
+  (assert (probe-file file) (file) "The file ~A does not exist." file)
   (check-md5sum file system)
   (extract-source system file)
   (verify-download system))
+
+
 
 (defgeneric install (name &key version file)
   (:method ((name symbol) &key version file)
@@ -170,7 +174,8 @@ the element-type of the returned string."
             (dbg "System ~A already present, skipping." system))
            (file (install-from-file system file))
            (t (download system)))
-     (process-dependencies system)
+     (let ((*indent* (+ 3 *indent*)))
+       (process-dependencies system))
      (perform system 'load-action))))
 
 (defmethod verify-download ((system system))
@@ -275,20 +280,36 @@ the element-type of the returned string."
 (defun update (url)
   (add-definition url :reload t))
 
+(defun installed-systems ()
+  (let ((names ()))
+    (do-systems (sys)
+      (when (component-exists-p sys)
+        (pushnew (name-of sys) names :test 'name=)))
+    names))
+
+(defun largest-version-of (system)
+  (first (systems-matching (lambda (c) (name= c system)) :key 'name-of)))
 
 (defun upgrade ()
+  (system-update)
+  
   (dolist (comp (all-files (find-system :sysdef-definitions)))
-    (with-simple-restart (ignore "Ignore")
+    (with-simple-restart (ignore "Ignore ~A" comp)
       (when (sysdef::definition-file-provider (input-file comp))
         (format *standard-output* "Updating definition file ~A." (input-file comp))
         (update (path-to-url (input-file comp))))))
 
-  ;; TODO: Write me
-  ;; Download latest version of installed systems
-  ;; OR
-  ;; download patches for installed systems
-  )
+  (register-sysdefs)
 
+  ;; TODO:
+  ;; download patches for installed systems
+  (handler-bind ((system-already-loaded (lambda (c)
+                                          (invoke-restart (find-restart 'continue c)))))
+    (dolist (sys (installed-systems))
+      (let ((largest-version (largest-version-of sys)))
+        (unless (component-exists-p largest-version)
+          (with-simple-restart (ignore "Ignore ~S" largest-version)
+            (download largest-version)))))))
 
 
 (defun file-equalp (file1 file2)
@@ -316,7 +337,5 @@ the element-type of the returned string."
         (unless (file-equalp input-file new-boot.lisp)
           (copy-file new-boot.lisp (input-file boot.lisp))))))
   t)
-
-;(system-update)
 
 ;; EOF

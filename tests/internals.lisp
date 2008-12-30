@@ -1,4 +1,5 @@
 (in-package :installer)
+
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (use-package :tryil))
 
@@ -35,9 +36,7 @@
   (do-systems (system)
     (when (provider-of system)
       (with-temp-file (system-source)
-        (format t "Checking system ~S~%" system)
-        (unless (assert-true (download-source system :into system-source))
-          (format t "~&Download ~ failed.~%" system))
+         (assert-true (download-source system :into system-source))
         (unless (md5sum-of system)
           (warn "MD5Sum missing for ~S~%" system))
         (unless (assert-true (check-md5sum system-source system))

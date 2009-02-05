@@ -151,6 +151,7 @@ the element-type of the returned string."
      (download-source system :into system-source)
      (install-from-file system system-source))))
 
+
 (defmethod install-from-file ((system system) file)
   (assert (probe-file file) (file) "The file ~A does not exist." file)
   (check-md5sum file system)
@@ -337,5 +338,13 @@ the element-type of the returned string."
         (unless (file-equalp input-file new-boot.lisp)
           (copy-file new-boot.lisp (input-file boot.lisp))))))
   t)
+
+
+(defclass uninstall-action (action) ())
+
+(defmethod execute ((system system) (action uninstall-action))
+  (when (component-exists-p system)
+    (delete-directory-and-files (directory-namestring (component-pathname system)))))
+
 
 ;; EOF

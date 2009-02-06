@@ -346,5 +346,12 @@ the element-type of the returned string."
   (when (component-exists-p system)
     (delete-directory-and-files (directory-namestring (component-pathname system)))))
 
+;; ensure that we don't uninstall any of our dependencies
+(defmethod dependency-applicablep ((dependency dependency) (action uninstall-action))
+  ;; do not descend into to dependencies
+  nil)
+
+(defmethod execute :after ((file component) (action uninstall-action))
+  (format t "Removed ~A.~%" (component-pathname file)))
 
 ;; EOF

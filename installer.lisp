@@ -289,16 +289,13 @@ the element-type of the returned string."
     names))
 
 (defun largest-version-of (system)
-  (first (systems-matching (lambda (c) (name= c system)) :key 'name-of)))
+  (first (systems-for system)))
+
 
 (defun upgrade ()
   (system-update)
   
-  (dolist (comp (all-files (find-system :sysdef-definitions)))
-    (with-simple-restart (ignore "Ignore ~A" comp)
-      (when (sysdef::definition-file-provider (input-file comp))
-        (format *standard-output* "Updating definition file ~A." (input-file comp))
-        (update (path-to-url (input-file comp))))))
+  (update-sysdefs)
 
   (register-sysdefs)
 
@@ -312,6 +309,12 @@ the element-type of the returned string."
           (with-simple-restart (ignore "Ignore ~S" largest-version)
             (download largest-version)))))))
 
+(defun update-sysdefs ()
+  (dolist (comp (all-files (find-system :sysdef-definitions)))
+    (with-simple-restart (ignore "Ignore ~A" comp)
+      (when (sysdef::definition-file-provider (input-file comp))
+        (format *standard-output* "Updating definition file ~A." (input-file comp))
+        (update (path-to-url (input-file comp)))))))
 
 (defun file-equalp (file1 file2)
   (equalp (md5sum-file file1)

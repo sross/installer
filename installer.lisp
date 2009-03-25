@@ -29,13 +29,16 @@
 ;;       upgrade should take a :system argument
 
 
+;; installer features
+;; update system definitions
+;;  (update) [done]
+;; update a particular system (update sysdefs and install latest version of a particular system)
+;;  (upgrade :hunchentoot) [done]
+;; update all systems. (update sysdefs & install latest version of installed systems)
+;;  (upgrade) [done]
+;; selfupdate (update sysdefs and update boot.lisp and mudballs)
+;;  (self-update)
 
-;; move it and all systems onto mudballs.com
-;; remove all local systems except for the initially required ones.
-
-;; test
-;; add upgrade and remove
-;; tag release :)
 
 (in-package #:installer)
 
@@ -44,7 +47,7 @@
   "Bound to the number of spaces to indent the current information message.")
 
 (defun dbg (fmt-ctrl &rest fmt-args)
-  (apply 'format *debug-io* (format nil "~~v@T~A"  fmt-ctrl) *indent* fmt-args)
+  (apply 'format *debug-io* (format nil "~&~~v@T~A"  fmt-ctrl) *indent* fmt-args)
   (fresh-line *debug-io*))
 
 (deftype octet ()
@@ -278,8 +281,11 @@ the element-type of the returned string."
                                                      (eql (provider-of sys) provider))))))))
 
 
-(defun update (url)
-  (add-definition url :reload t))
+(defun update (&optional url)
+  (if url
+      (add-definition url :reload t)
+      (update-sysdefs)))
+  
 
 (defun installed-systems ()
   (let ((names ()))
@@ -292,9 +298,7 @@ the element-type of the returned string."
   (first (systems-for system)))
 
 
-(defun upgrade ()
-  (system-update)
-  
+(defun upgrade (&optional system-name)
   (update-sysdefs)
 
   (register-sysdefs)
@@ -303,11 +307,16 @@ the element-type of the returned string."
   ;; download patches for installed systems
   (handler-bind ((system-already-loaded (lambda (c)
                                           (invoke-restart (find-restart 'continue c)))))
-    (dolist (sys (installed-systems))
-      (let ((largest-version (largest-version-of sys)))
-        (unless (component-exists-p largest-version)
-          (with-simple-restart (ignore "Ignore ~S" largest-version)
-            (download largest-version)))))))
+    (if system-name
+        (upgrade-system system-name)
+        (dolist (sys (installed-systems))
+          (upgrade-system sys)))))
+
+(defun upgrade-system (system)
+  (let ((largest-version (largest-version-of system)))
+    (unless (component-exists-p largest-version)
+      (with-simple-restart (ignore "Ignore ~S" largest-version)
+        (download largest-version)))))
 
 (defun update-sysdefs ()
   (dolist (comp (all-files (find-system :sysdef-definitions)))
@@ -331,7 +340,7 @@ the element-type of the returned string."
                                  (ignore-errors (copy-file ,gfile ,path)))))
            ,@body)))))
 
-(defun system-update ()
+(defun self-update ()
   (let* ((boot.lisp (find-component :boot "boot"))
          (input-file (input-file boot.lisp)))
     (with-temp-file (new-boot.lisp)
